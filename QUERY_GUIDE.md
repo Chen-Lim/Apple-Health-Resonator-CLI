@@ -1,189 +1,303 @@
-# Apple Health Resonator — 数据库字段与查询指南
+# Apple Health Resonator Query Guide for AI Agents
 
-## 数据库表结构
+This document is for AI agents that need to use the `ahr` CLI safely and predictably.
 
-### 表一：`records`（健康记录，主表）
+All statements below were verified against the current Rust implementation and test suite in this repository on 2026-04-07.
 
-| 列名 | 类型 | 是否必填 | 说明 |
-|------|------|----------|------|
-| `id` | INTEGER | 自动生成 | 主键 |
-| `record_type` | TEXT | ✅ 必填 | 数据类型，见下方「常用 record_type」 |
-| `value_text` | TEXT | 可为空 | 原始字符串值（类别类型用此字段，如睡眠阶段） |
-| `value_num` | REAL | 可为空 | 数值（若 value_text 可解析为数字则自动填入，如心率、步数） |
-| `unit` | TEXT | 可为空 | 单位（如 `count/min`、`km`、`kcal`） |
-| `source_name` | TEXT | 可为空 | 数据来源（如 `Apple Watch`、`iPhone`） |
-| `source_version` | TEXT | 可为空 | 来源 App 版本号 |
-| `device` | TEXT | 可为空 | 设备字符串（完整设备描述） |
-| `creation_date` | TEXT | 可为空 | 记录创建时间（UTC RFC3339） |
-| `start_date` | TEXT | ✅ 必填 | 记录开始时间（UTC RFC3339） |
-| `end_date` | TEXT | ✅ 必填 | 记录结束时间（UTC RFC3339） |
-| `dedupe_key` | TEXT | 自动生成 | SHA256 去重键，重复导入不会产生重复数据 |
+## 1. Tool Contract
 
-> **重要**：`value_text` 和 `value_num` 来自同一原始字段。
-> - 若原始值是纯数字（如心率 `72`），则 `value_num = 72`，`value_text = "72"`
-> - 若原始值是字符串（如睡眠阶段），则只有 `value_text` 有意义，`value_num` 为 NULL
+CLI name:
 
----
-
-### 表二：`workouts`（运动记录）
-
-| 列名 | 类型 | 是否必填 | 说明 |
-|------|------|----------|------|
-| `id` | INTEGER | 自动生成 | 主键 |
-| `workout_type` | TEXT | ✅ 必填 | 运动类型（如 `HKWorkoutActivityTypeRunning`） |
-| `duration` | REAL | 可为空 | 运动时长（数值） |
-| `duration_unit` | TEXT | 可为空 | 时长单位（通常为 `min`） |
-| `total_distance` | REAL | 可为空 | 总距离（数值，单位见对应字段） |
-| `total_energy_burned` | REAL | 可为空 | 消耗卡路里（数值） |
-| `source_name` | TEXT | 可为空 | 数据来源 |
-| `creation_date` | TEXT | 可为空 | 记录创建时间（UTC RFC3339） |
-| `start_date` | TEXT | ✅ 必填 | 运动开始时间（UTC RFC3339） |
-| `end_date` | TEXT | ✅ 必填 | 运动结束时间（UTC RFC3339） |
-| `dedupe_key` | TEXT | 自动生成 | SHA256 去重键 |
-
-> **注意**：`WorkoutEvent`、`WorkoutRoute`、`MetadataEntry` 等嵌套内容当前**不导入**，仅存储 Workout 顶层属性。
-
----
-
-### 表三：`ingest_runs`（导入历史）
-
-| 列名 | 类型 | 说明 |
-|------|------|------|
-| `id` | INTEGER | 主键 |
-| `started_at` | TEXT | 导入开始时间 |
-| `finished_at` | TEXT | 导入完成时间 |
-| `input_path` | TEXT | 输入文件路径 |
-| `records_inserted` | INTEGER | 本次插入的 records 数量 |
-| `workouts_inserted` | INTEGER | 本次插入的 workouts 数量 |
-| `records_skipped` | INTEGER | 因去重跳过的数量 |
-| `errors_count` | INTEGER | 错误数量 |
-| `schema_version` | TEXT | Schema 版本号 |
-
----
-
-## 时间字段说明
-
-所有时间均已**统一转为 UTC RFC3339**格式，例如：
-
-```
-2025-01-15T00:30:00Z
+```bash
+ahr
 ```
 
-Apple Health 原始格式（如 `2025-01-15 08:30:00 +0800`）在导入时自动转换。
+If the binary is not installed globally, run from the repository root with:
 
-查询时推荐使用**固定 UTC 时间范围**，而不是 `datetime('now', '-N days')`（除非你的数据是最近的）：
+```bash
+cargo run -- <subcommand> ...
+```
+
+Subcommands:
+
+```bash
+ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr inspect --db <DB>
+ahr stats --db <DB>
+ahr query --db <DB> --sql "<SQL>" [--limit <N>]
+```
+
+Behavior:
+
+- `ingest` imports `export.xml` or `export.zip` into SQLite.
+- `inspect` returns stable pretty JSON for schema-level orientation.
+- `stats` returns compact JSON for fast summary checks.
+- `query` returns a compact JSON array of row objects.
+
+## 2. Required Agent Workflow
+
+Use this sequence unless the user explicitly asks otherwise:
+
+1. Confirm or choose an explicit SQLite path.
+2. If the DB does not exist yet, run `ingest`.
+3. Run `inspect` once to confirm table presence and high-level coverage.
+4. Run `stats` when you need record volumes, top types, or recent-activity context.
+5. Run `query` with a bounded, read-only SQL statement.
+
+Do not start with an unbounded `SELECT *`.
+
+## 3. Stable Output Shapes
+
+### 3.1 `inspect`
+
+Command:
+
+```bash
+ahr inspect --db ./health_data.db
+```
+
+Returns pretty JSON with this shape:
+
+```json
+{
+  "tables": ["ingest_runs", "records", "workouts"],
+  "record_count": 2,
+  "workout_count": 1,
+  "date_range": {
+    "start": "2024-01-15T00:00:00Z",
+    "end": "2024-01-16T01:00:00Z"
+  },
+  "sources": ["Apple Watch", "iPhone"],
+  "record_types": ["HKQuantityTypeIdentifierStepCount"]
+}
+```
+
+Semantics:
+
+- `tables`: non-internal SQLite tables, sorted by name.
+- `record_count`: `COUNT(*)` from `records`.
+- `workout_count`: `COUNT(*)` from `workouts`.
+- `date_range`: min `start_date` and max `end_date` across `records` and `workouts`.
+- `sources`: distinct non-empty `source_name` values from `records` and `workouts`.
+- `record_types`: distinct `record_type` values from `records`.
+
+### 3.2 `stats`
+
+Command:
+
+```bash
+ahr stats --db ./health_data.db
+```
+
+Returns compact JSON with this shape:
+
+```json
+{"total_records":2,"total_workouts":1,"top_types":[{"record_type":"HKQuantityTypeIdentifierStepCount","count":1}],"top_sources":[{"source_name":"Apple Watch","count":2}],"recent_activity":false}
+```
+
+Semantics:
+
+- `top_types`: top 10 `records.record_type` values by count.
+- `top_sources`: top 10 combined `source_name` values from `records` and `workouts`.
+- `recent_activity`: whether any `start_date` exists within the last 30 days from current runtime time.
+
+### 3.3 `query`
+
+Command:
+
+```bash
+ahr query --db ./health_data.db --sql "SELECT record_type, value_num FROM records ORDER BY id" --limit 5
+```
+
+Returns compact JSON:
+
+```json
+[{"record_type":"HKQuantityTypeIdentifierStepCount","value_num":1234.0}]
+```
+
+Semantics:
+
+- Output is always a JSON array.
+- Each row is a JSON object keyed by the SQL result column name or alias.
+- SQLite `NULL` becomes JSON `null`.
+- SQLite integer becomes JSON integer.
+- SQLite real becomes JSON number.
+- SQLite text becomes JSON string.
+- SQLite blob becomes lowercase hex string.
+
+## 4. Actual Database Schema
+
+Use these exact columns. Do not invent fields.
+
+### 4.1 `records`
+
+```text
+id INTEGER PRIMARY KEY
+record_type TEXT NOT NULL
+value_text TEXT
+value_num REAL
+unit TEXT
+source_name TEXT
+source_version TEXT
+device TEXT
+creation_date TEXT
+start_date TEXT NOT NULL
+end_date TEXT NOT NULL
+dedupe_key TEXT UNIQUE
+```
+
+Useful index-backed filters:
+
+- `(record_type, start_date)`
+- `(source_name, start_date)`
+
+### 4.2 `workouts`
+
+```text
+id INTEGER PRIMARY KEY
+workout_type TEXT NOT NULL
+duration REAL
+duration_unit TEXT
+total_distance REAL
+total_energy_burned REAL
+source_name TEXT
+creation_date TEXT
+start_date TEXT NOT NULL
+end_date TEXT NOT NULL
+dedupe_key TEXT UNIQUE
+```
+
+Useful index-backed filter:
+
+- `(workout_type, start_date)`
+
+### 4.3 `ingest_runs`
+
+```text
+id INTEGER PRIMARY KEY
+started_at TEXT NOT NULL
+finished_at TEXT
+input_path TEXT NOT NULL
+records_inserted INTEGER
+workouts_inserted INTEGER
+records_skipped INTEGER
+errors_count INTEGER
+schema_version TEXT NOT NULL
+```
+
+## 5. SQL Safety Rules Enforced by the CLI
+
+`ahr query` validates SQL before execution.
+
+Allowed:
+
+- A single read-only statement.
+- Leading keyword `SELECT`.
+- Leading keyword `WITH`, but only when it resolves to a `SELECT`.
+
+Rejected:
+
+- Empty SQL.
+- Multiple statements such as `SELECT 1; DROP TABLE records`.
+- Any non-read-only SQL.
+- Statements whose first keyword is not `SELECT` or `WITH`.
+
+Important operational detail:
+
+- `--limit` truncates rows in CLI code after SQLite starts returning rows.
+- Therefore, you should still put an explicit SQL `LIMIT` inside the query for performance and predictability.
+
+Another important detail:
+
+- The CLI does not support bind parameters.
+- Write complete SQL with inline literals.
+
+## 6. Query Writing Rules for Agents
+
+Prefer these practices:
+
+- Select only the columns needed for the answer.
+- Always add SQL `LIMIT`, even if `--limit` is also set.
+- Add `ORDER BY` whenever “latest”, “earliest”, “top”, or “recent” matters.
+- Use explicit date predicates on `start_date` or `end_date`.
+- Alias computed columns to stable names.
+- Query `inspect` or `stats` first if table coverage is unclear.
+
+Avoid these patterns:
+
+- `SELECT *` on large scans unless the user explicitly needs full rows.
+- Unbounded queries without SQL `LIMIT`.
+- Assuming nested workout details exist. Current schema stores only workout top-level fields.
+- Assuming joins to tables that do not exist.
+
+## 7. Recommended Query Patterns
+
+Latest records of one type:
 
 ```sql
--- 正确：固定日期范围
-AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z'
-
--- 谨慎使用：依赖当前时间，历史数据可能查不到
-AND start_date >= datetime('now', '-30 days')
+SELECT record_type, value_num, unit, start_date, end_date, source_name
+FROM records
+WHERE record_type = 'HKQuantityTypeIdentifierStepCount'
+ORDER BY start_date DESC
+LIMIT 20
 ```
 
----
+Daily aggregate:
 
-## 常用 record_type 及查询方式
-
-### 数值类型（用 `value_num` 查询）
-
-| record_type | 说明 | 单位 |
-|-------------|------|------|
-| `HKQuantityTypeIdentifierHeartRate` | 心率 | count/min（BPM） |
-| `HKQuantityTypeIdentifierStepCount` | 步数 | count |
-| `HKQuantityTypeIdentifierDistanceWalkingRunning` | 步行/跑步距离 | km |
-| `HKQuantityTypeIdentifierActiveEnergyBurned` | 活动消耗卡路里 | kcal |
-| `HKQuantityTypeIdentifierBasalEnergyBurned` | 基础代谢卡路里 | kcal |
-| `HKQuantityTypeIdentifierFlightsClimbed` | 爬楼层数 | count |
-| `HKQuantityTypeIdentifierBodyMass` | 体重 | kg |
-| `HKQuantityTypeIdentifierHeight` | 身高 | cm |
-| `HKQuantityTypeIdentifierBloodPressureSystolic` | 收缩压 | mmHg |
-| `HKQuantityTypeIdentifierBloodPressureDiastolic` | 舒张压 | mmHg |
-| `HKQuantityTypeIdentifierOxygenSaturation` | 血氧饱和度 | % |
-| `HKQuantityTypeIdentifierRespiratoryRate` | 呼吸频率 | count/min |
-| `HKQuantityTypeIdentifierBodyTemperature` | 体温 | degC |
-| `HKQuantityTypeIdentifierVO2Max` | 最大摄氧量 | mL/min·kg |
-| `HKQuantityTypeIdentifierHeartRateVariabilitySDNN` | 心率变异性 HRV | ms |
-
-### 类别类型（用 `value_text` 查询）
-
-#### 睡眠分析 `HKCategoryTypeIdentifierSleepAnalysis`
-
-| value_text | 说明 | 计入"实际睡眠"？ |
-|------------|------|----------------|
-| `HKCategoryValueSleepAnalysisAsleepCore` | 核心睡眠（浅睡） | ✅ 是 |
-| `HKCategoryValueSleepAnalysisAsleepDeep` | 深度睡眠 | ✅ 是 |
-| `HKCategoryValueSleepAnalysisAsleepREM` | REM 睡眠 | ✅ 是 |
-| `HKCategoryValueSleepAnalysisAsleepUnspecified` | 未分类睡眠（旧版） | ✅ 是 |
-| `HKCategoryValueSleepAnalysisAwake` | 清醒时段 | ❌ 否 |
-| `HKCategoryValueSleepAnalysisInBed` | 在床上（不一定在睡） | ❌ 否 |
-
----
-
-## 常用查询模板
-
-### 心率
-
-```bash
-# 某月平均/最低/最高心率
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT ROUND(AVG(value_num),1) as avg_hr, MIN(value_num) as min_hr, MAX(value_num) as max_hr FROM records WHERE record_type = 'HKQuantityTypeIdentifierHeartRate' AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z'"
-
-# 按天查每日平均心率
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT date(start_date) as day, ROUND(AVG(value_num),1) as avg_hr FROM records WHERE record_type = 'HKQuantityTypeIdentifierHeartRate' AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z' GROUP BY date(start_date) ORDER BY day" \
-  --limit 31
+```sql
+SELECT substr(start_date, 1, 10) AS day, SUM(value_num) AS total_steps
+FROM records
+WHERE record_type = 'HKQuantityTypeIdentifierStepCount'
+GROUP BY substr(start_date, 1, 10)
+ORDER BY day DESC
+LIMIT 30
 ```
 
-### 睡眠
+Recent workouts:
 
-```bash
-# 某月每日睡眠时长（小时）
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT date(start_date) as day, ROUND(SUM((julianday(end_date)-julianday(start_date))*24),2) as sleep_hours FROM records WHERE record_type = 'HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ('HKCategoryValueSleepAnalysisAsleepCore','HKCategoryValueSleepAnalysisAsleepDeep','HKCategoryValueSleepAnalysisAsleepREM','HKCategoryValueSleepAnalysisAsleepUnspecified') AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z' GROUP BY date(start_date) ORDER BY day" \
-  --limit 31
-
-# 某月平均睡眠时长
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT ROUND(AVG(daily_hours),2) as avg_sleep_hours FROM (SELECT date(start_date) as day, SUM((julianday(end_date)-julianday(start_date))*24) as daily_hours FROM records WHERE record_type = 'HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ('HKCategoryValueSleepAnalysisAsleepCore','HKCategoryValueSleepAnalysisAsleepDeep','HKCategoryValueSleepAnalysisAsleepREM','HKCategoryValueSleepAnalysisAsleepUnspecified') AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z' GROUP BY date(start_date))"
+```sql
+SELECT workout_type, duration, duration_unit, total_distance, total_energy_burned, start_date
+FROM workouts
+ORDER BY start_date DESC
+LIMIT 20
 ```
 
-### 步数
+Import audit:
 
-```bash
-# 按天查步数
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT date(start_date) as day, CAST(SUM(value_num) AS INTEGER) as total_steps FROM records WHERE record_type = 'HKQuantityTypeIdentifierStepCount' AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z' GROUP BY date(start_date) ORDER BY day" \
-  --limit 31
+```sql
+SELECT id, started_at, finished_at, input_path, records_inserted, workouts_inserted, records_skipped, errors_count, schema_version
+FROM ingest_runs
+ORDER BY id DESC
+LIMIT 10
 ```
 
-### 运动记录
+## 8. Error Handling Guidance
 
-```bash
-# 查看所有运动类型
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT workout_type, COUNT(*) as cnt FROM workouts GROUP BY workout_type ORDER BY cnt DESC"
+If `query` fails:
 
-# 查某月跑步记录（距离和消耗）
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT date(start_date) as day, ROUND(total_distance,2) as km, ROUND(total_energy_burned,0) as kcal, ROUND(duration,1) as min FROM workouts WHERE workout_type = 'HKWorkoutActivityTypeRunning' AND start_date >= '2025-01-01T00:00:00Z' AND start_date < '2025-02-01T00:00:00Z' ORDER BY day" \
-  --limit 31
+- On `multiple SQL statements are not allowed`: remove everything after the first statement.
+- On `only read-only SELECT statements are allowed`: rewrite as pure `SELECT` or `WITH ... SELECT`.
+- On `only SELECT statements are allowed`: remove DDL, DML, `PRAGMA`, or attachment logic.
+- On `invalid SQL`: simplify the statement and verify table and column names from this guide.
+
+If a result is unexpectedly empty:
+
+- Check `inspect` for counts and date range.
+- Check `stats` for available `record_type` values indirectly via `top_types`.
+- Loosen filters before assuming data is absent.
+
+## 9. Time and Data Assumptions
+
+Imported datetimes are normalized to UTC RFC3339 strings such as:
+
+```text
+2024-01-15T00:30:00Z
 ```
 
-### 探索数据
+When filtering by date, compare against UTC timestamps or ISO date prefixes intentionally.
 
-```bash
-# 查看数据库中有哪些数据类型（按数量排序）
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT record_type, COUNT(*) as cnt FROM records GROUP BY record_type ORDER BY cnt DESC" \
-  --limit 50
+Current ingestion scope:
 
-# 查看数据的日期范围
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT MIN(start_date) as earliest, MAX(start_date) as latest FROM records"
-
-# 查看某个类型的原始样本
-cargo run -- query --db ./health_data.db \
-  --sql "SELECT * FROM records WHERE record_type = 'HKQuantityTypeIdentifierHeartRate' ORDER BY start_date DESC" \
-  --limit 5
-```
+- `records`: supported.
+- `workouts`: top-level workout fields only.
+- Nested `WorkoutEvent`, `WorkoutRoute`, and `MetadataEntry`: not stored as separate queryable tables.

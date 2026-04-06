@@ -1,0 +1,7 @@
+interface:
+  display_name: "Apple Health Resonator CLI"
+  short_description: "Use the local ahr CLI safely and predictably."
+  default_prompt: "Use $apple-health-resonator-cli to inspect an Apple Health Resonator database and answer questions with bounded read-only queries."
+
+policy:
+  allow_implicit_invocation: true
