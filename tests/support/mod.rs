@@ -19,12 +19,21 @@ pub fn temp_db(temp_dir: &TempDir) -> PathBuf {
 
 #[allow(dead_code)]
 pub fn create_zip_fixture(source_xml: &Path, output_zip: &Path) -> Result<()> {
+    create_zip_fixture_with_entry_name(source_xml, output_zip, "export.xml")
+}
+
+#[allow(dead_code)]
+pub fn create_zip_fixture_with_entry_name(
+    source_xml: &Path,
+    output_zip: &Path,
+    entry_name: &str,
+) -> Result<()> {
     let mut xml = String::new();
     File::open(source_xml)?.read_to_string(&mut xml)?;
 
     let file = File::create(output_zip)?;
     let mut writer = zip::ZipWriter::new(file);
-    writer.start_file("export.xml", SimpleFileOptions::default())?;
+    writer.start_file(entry_name, SimpleFileOptions::default())?;
     writer.write_all(xml.as_bytes())?;
     writer.finish()?;
     Ok(())
