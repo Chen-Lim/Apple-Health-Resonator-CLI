@@ -1,0 +1,55 @@
+# 1. Rust & Cargo
+
+/target/
+# Cargo.lock 不被忽略，因为这是一个 CLI binary 项目，需要锁定依赖版本以保证构建的一致性
+
+
+# 2. Apple Health Project Specific (CRITICAL: 保护隐私数据)
+# 绝对禁止提交任何健康导出文件
+*.zip
+*.xml
+export.xml
+export.zip
+/export/
+
+# 绝对禁止提交生成的 SQLite 数据库及其中间文件
+*.db
+*.sqlite
+*.sqlite3
+*-journal
+*-shm
+*-wal
+health_data.db
+
+# 忽略测试生成的临时目录或大规模切片出的 CSV
+/tmp/
+*.csv
+
+# 允许提交 tests 目录下的特定小型 fixture 文件（通过在前面加 ! 来排除忽略）
+# !tests/fixtures/export-small.xml
+# !tests/fixtures/export-small.zip
+
+# 3. IDEs & Editors
+
+# Zed
+.zed/
+
+# JetBrains
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# 4. OS & Environment
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Trashes
+.AppleDouble
+
+# Windows
+Thumbs.db
+ehthumbs.db
