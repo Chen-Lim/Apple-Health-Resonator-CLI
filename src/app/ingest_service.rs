@@ -54,7 +54,7 @@ pub fn run_ingest(config: IngestConfig) -> Result<IngestReport> {
             let entry = archive
                 .by_index(entry_index)
                 .map_err(anyhow::Error::from)
-                .context("failed to open export.xml entry from zip")?;
+                .context("failed to open matched Apple Health export xml entry from zip")?;
             let reader = BufReader::new(entry);
             run_ingest_reader(reader, &mut conn, config.batch_size, progress.as_ref())?
         }

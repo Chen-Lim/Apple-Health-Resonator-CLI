@@ -5,6 +5,8 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 use zip::ZipArchive;
 
+use crate::parser::file_names::is_supported_export_xml_name;
+
 pub(crate) enum InputSource {
     Xml(BufReader<File>),
     Zip {
@@ -32,8 +34,8 @@ fn open_zip(path: &Path) -> Result<InputSource> {
     let entry_index = archive
         .file_names()
         .enumerate()
-        .find_map(|(idx, name)| name.ends_with("export.xml").then_some(idx))
-        .ok_or_else(|| anyhow!("zip archive does not contain export.xml"))?;
+        .find_map(|(idx, name)| is_supported_export_xml_name(name).then_some(idx))
+        .ok_or_else(|| anyhow!("zip archive does not contain a supported Apple Health export xml file"))?;
 
     Ok(InputSource::Zip {
         archive,
