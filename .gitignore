@@ -3,6 +3,8 @@
 /target/
 # Cargo.lock 不被忽略，因为这是一个 CLI binary 项目，需要锁定依赖版本以保证构建的一致性
 
+/doc/
+# 开发文档禁止公开
 
 # 2. Apple Health Project Specific (CRITICAL: 保护隐私数据)
 # 绝对禁止提交任何健康导出文件
