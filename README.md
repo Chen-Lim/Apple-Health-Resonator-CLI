@@ -1,310 +1,172 @@
-# Apple Health Resonator
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust Version](https://img.shields.io/badge/rust-2021-blue.svg)](https://www.rust-lang.org/)
 
-一个使用 Rust 构建的本地 CLI 工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 转换为 SQLite，并提供适合 Agent / LLM 调用的结构化查询接口。
+Apple Health Resonator (`ahr`) is a local-first CLI for importing Apple Health exports into SQLite and querying them safely. It is designed for individual use as well as AI-agent workflows.
 
-## 项目目标
+`ahr` converts `export.xml` or `export.zip` into a stable local database, keeps all processing on-device, and exposes read-only commands for inspection, summary, and SQL querying.
 
-本项目聚焦三件事：
+[中文说明](#中文说明) | [English](#english) | [AI Agent Guide](./AGENTS.md)
 
-- `ingest`：流式导入 Apple Health 导出文件
-- `store`：写入 SQLite，形成稳定 schema
-- `expose`：通过 CLI 提供 `inspect / stats / query`
+## 中文说明
 
-不包含以下能力：
+### 项目简介
 
-- GUI
-- 数据可视化
-- 云同步
-- embedding / 向量数据库
-- 自动 SQL 生成
+**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 SQLite，并通过受控的只读接口进行检查、统计和查询。
 
-## 当前特性
+适合两类场景：
 
-- 支持输入 `export.xml` 和 `export.zip`
-- 使用 `quick-xml` 进行 streaming XML 解析
-- 使用 SQLite 作为本地数据存储
-- 支持记录去重
-- 支持导入运行记录 `ingest_runs`
-- 支持稳定 JSON 输出的 `inspect`
-- 支持紧凑 JSON 输出的 `stats`
-- 支持受控只读 SQL 的 `query`
+- 个人在本地整理和分析健康数据
+- AI Agent 在受控边界内读取和查询数据库
 
-## 技术栈
+### 核心特性
 
-- Rust 2021
-- `quick-xml`
-- `rusqlite`
-- `clap`
-- `anyhow`
-- `chrono`
-- `serde / serde_json`
-- `indicatif`
-- `tracing`
+- **本地处理**：不依赖云端服务，数据始终保留在本机。
+- **高性能导入**：支持流式解析大型 `export.xml`，也可直接读取 `export.zip`。
+- **稳定 Schema**：导入后生成可预测的 SQLite 结构，便于后续分析和自动化。
+- **去重与时间标准化**：统一时间格式并避免重复导入。
+- **面向 Agent 的输出**：`inspect` 提供格式化 JSON，`stats` 和 `query` 提供紧凑 JSON。
+- **只读查询防护**：`query` 仅允许单条只读 SQL，阻止 `DROP`、`UPDATE`、`DELETE`、`ATTACH` 等语句。
 
-## 安装与构建
+### 安装
 
-要求：
+目前发布的预编译二进制面向 **Apple Silicon macOS**。
 
-- Rust 工具链
-- `cargo`
+**Homebrew**
 
-构建：
+```bash
+brew install Chen-Lim/tap/ahr
+```
+
+**手动下载**
+
+从 [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) 下载对应版本的二进制文件，并将其加入 `PATH`。
+
+**源码编译**
 
 ```bash
 cargo build --release
+./target/release/ahr --help
 ```
 
-运行测试：
+### 快速开始
+
+1. 导入 Apple Health 导出文件到本地 SQLite：
 
 ```bash
-cargo test
+ahr ingest /path/to/export.zip --db ./health_data.db
 ```
 
-可执行文件名：
+2. 查看数据库摘要：
 
 ```bash
-ahr
+ahr inspect --db ./health_data.db
 ```
 
-查看 CLI 帮助与版本：
+3. 执行只读 SQL 查询：
 
 ```bash
-ahr --help
-ahr --version
+ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date FROM records ORDER BY start_date DESC LIMIT 20" --limit 20
 ```
 
-如果使用源码直接运行：
+### CLI 概览
 
 ```bash
-cargo run -- <subcommand>
+ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr inspect --db <DB>
+ahr stats --db <DB>
+ahr query --db <DB> --sql "<SQL>" [--limit <N>]
 ```
 
-## 快速开始
+默认数据库路径为 `./health_data.db`。
 
-### 1. 导入 Apple Health 数据
+### 数据模型
+
+- `records`：一般健康记录，例如步数、心率、睡眠等。
+- `workouts`：顶层 workout 会话数据。
+- `ingest_runs`：每次导入的元数据与计数信息。
+
+更完整的 Agent 使用约束、输出格式和 schema 说明见 [AGENTS.md](./AGENTS.md)。
+
+## English
+
+### Overview
+
+**Apple Health Resonator (`ahr`)** is a local-first CLI for importing Apple Health exports (`export.xml` or `export.zip`) into SQLite and querying them through a controlled, read-only interface.
+
+It is suitable for:
+
+- individuals exploring their own health data locally
+- AI agents that need a bounded, predictable database workflow
+
+### Features
+
+- **Local-first**: no cloud sync; data stays on the machine.
+- **Fast ingestion**: stream-parses large `export.xml` files and can read `export.zip` directly.
+- **Stable schema**: writes to a predictable SQLite structure for analysis and automation.
+- **Deduplication and normalized timestamps**: avoids duplicate imports and standardizes time values.
+- **Agent-oriented output**: `inspect` returns pretty JSON; `stats` and `query` return compact JSON.
+- **Read-only SQL enforcement**: blocks mutating or unsafe statements such as `DROP`, `UPDATE`, `DELETE`, and `ATTACH`.
+
+### Installation
+
+Prebuilt binaries are currently provided for **Apple Silicon macOS**.
+
+**Homebrew**
 
 ```bash
-cargo run -- ingest /path/to/export.xml
+brew install Chen-Lim/tap/ahr
 ```
 
-或：
+**Manual download**
+
+Download the appropriate binary from [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) and add it to your `PATH`.
+
+**Build from source**
 
 ```bash
-cargo run -- ingest /path/to/export.zip
+cargo build --release
+./target/release/ahr --help
 ```
 
-默认数据库文件为当前目录下的 `./health_data.db`。
+### Quick Start
 
-也可以显式指定：
+1. Ingest an Apple Health export into a local SQLite database:
 
 ```bash
-cargo run -- ingest /path/to/export.xml --db /path/to/health.db
+ahr ingest /path/to/export.zip --db ./health_data.db
 ```
 
-### 2. 查看数据库摘要
+2. Inspect database coverage:
 
 ```bash
-cargo run -- inspect --db ./health_data.db
+ahr inspect --db ./health_data.db
 ```
 
-示例输出：
-
-```json
-{
-  "tables": ["ingest_runs", "records", "workouts"],
-  "record_count": 123,
-  "workout_count": 8,
-  "date_range": {
-    "start": "2024-01-01T00:00:00Z",
-    "end": "2024-03-31T23:59:59Z"
-  },
-  "sources": ["Apple Watch", "iPhone"],
-  "record_types": ["HKQuantityTypeIdentifierStepCount"]
-}
-```
-
-### 3. 查看统计信息
+3. Run a read-only SQL query:
 
 ```bash
-cargo run -- stats --db ./health_data.db
+ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date FROM records ORDER BY start_date DESC LIMIT 20" --limit 20
 ```
 
-示例输出：
-
-```json
-{"total_records":123,"total_workouts":8,"top_types":[...],"top_sources":[...],"recent_activity":true}
-```
-
-### 4. 执行只读查询
+### CLI Summary
 
 ```bash
-cargo run -- query --db ./health_data.db --sql "SELECT record_type, value_num, start_date FROM records ORDER BY start_date DESC" --limit 20
+ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr inspect --db <DB>
+ahr stats --db <DB>
+ahr query --db <DB> --sql "<SQL>" [--limit <N>]
 ```
 
-示例输出：
+The default database path is `./health_data.db`.
 
-```json
-[{"record_type":"HKQuantityTypeIdentifierStepCount","value_num":1234.0,"start_date":"2024-01-15T00:00:00Z"}]
-```
+### Data Model
 
-## CLI 说明
+- `records`: general health records such as steps, heart rate, and sleep metrics.
+- `workouts`: top-level workout session data.
+- `ingest_runs`: metadata and counters for each ingestion run.
 
-### `ahr ingest`
+For exact agent operating rules, output shapes, SQL safety rules, and schema details, see [AGENTS.md](./AGENTS.md).
 
-```bash
-ahr ingest <path> [--db <path>] [--batch-size <n>] [--quiet]
-```
+## AI Agent Guide
 
-说明：
-
-- 自动识别输入是 `.xml` 还是 `.zip`
-- 默认数据库路径：`./health_data.db`
-- 默认批量写入大小：`10000`
-- `--quiet` 可关闭进度条
-
-### `ahr inspect`
-
-```bash
-ahr inspect --db <path>
-```
-
-输出为稳定的 pretty JSON，适合人工阅读和程序解析。
-
-### `ahr stats`
-
-```bash
-ahr stats --db <path>
-```
-
-输出为紧凑 JSON，适合 Agent 调用。
-
-### `ahr query`
-
-```bash
-ahr query --db <path> --sql "<SQL>" [--limit N]
-```
-
-限制：
-
-- 只允许单条只读查询
-- 不允许多语句
-- 不允许 DDL / DML / `PRAGMA` / `ATTACH`
-- 默认 `limit = 1000`
-
-## 数据库 Schema
-
-当前 MVP 包含三张表：
-
-- `records`
-- `workouts`
-- `ingest_runs`
-
-其中：
-
-- `records` 存储 Apple Health Record
-- `workouts` 存储 Workout 顶层属性
-- `ingest_runs` 存储每次导入的元信息
-
-同时创建以下索引：
-
-- `idx_records_type_date`
-- `idx_records_source_date`
-- `idx_workouts_type_date`
-
-## 数据处理规则
-
-### 时间标准化
-
-Apple Health 原始时间格式类似：
-
-```text
-2024-01-15 08:30:00 +0800
-```
-
-导入时会统一转换为 UTC RFC3339：
-
-```text
-2024-01-15T00:30:00Z
-```
-
-### 去重规则
-
-去重键基于规范化后的字段生成，核心字段包括：
-
-- type
-- source
-- start_date
-- end_date
-- value
-- unit
-
-这意味着同一条记录即使原始时区表示不同，只要标准化后相同，也会被正确去重。
-
-### Workout 范围
-
-当前仅支持 Workout 顶层属性，不处理以下嵌套内容：
-
-- `WorkoutEvent`
-- `WorkoutRoute`
-- `MetadataEntry`
-
-遇到这些子元素时会安全跳过，不会导致 fatal error。
-
-## 关于 zip 导入实现
-
-当前 zip 导入不是先解压到临时文件，而是：
-
-- 在 `InputSource` 中持有 `ZipArchive<File>`
-- 在 `ingest_service` 的同一作用域内借用 `export.xml` entry
-- 通过泛型 `BufRead` 解析逻辑直接交给 `quick-xml`
-
-这样做的好处是：
-
-- 避免额外磁盘写入
-- 避免临时文件管理
-- 不需要 `unsafe`
-- 更适合后续大体积导入
-
-## 项目结构
-
-```text
-src/
-├── app/        # 应用服务层，编排 ingest / inspect / stats / query
-├── cli/        # 命令定义与参数转换
-├── domain/     # 领域模型与 DTO
-├── infra/      # 日志、时间、哈希等基础设施
-├── output/     # JSON 输出
-├── parser/     # 输入、XML 读取、提取、规范化
-└── storage/    # SQLite 连接、schema、写入、查询
-```
-
-## 已验证内容
-
-当前已有集成测试覆盖：
-
-- 基础 XML 导入
-- zip 导入
-- 去重
-- `inspect`
-- `stats`
-- `query` JSON 输出
-- `query` 拒绝多语句和修改性 SQL
-
-运行：
-
-```bash
-cargo test
-```
-
-## 适用场景
-
-- 将 Apple Health 导出转成可查询数据库
-- 为本地 Agent 提供结构化健康数据访问层
-- 为后续数据分析或上层工具提供稳定底座
-
-## Roadmap
-
-
-- 增量导入
-- 导出 Parquet
-- 更细粒度的错误报告
+Agent-specific operating rules, output contracts, and query patterns are documented in [AGENTS.md](./AGENTS.md).
