@@ -66,6 +66,13 @@ cargo test
 ahr
 ```
 
+查看 CLI 帮助与版本：
+
+```bash
+ahr --help
+ahr --version
+```
+
 如果使用源码直接运行：
 
 ```bash

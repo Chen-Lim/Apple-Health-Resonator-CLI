@@ -8,12 +8,13 @@ use crate::domain::IngestConfig;
 
 #[derive(Debug, Args)]
 pub struct IngestArgs {
+    #[arg(help = "Path to Apple Health export.xml or export.zip")]
     pub path: PathBuf,
-    #[arg(long, default_value = "./health_data.db")]
+    #[arg(long, default_value = "./health_data.db", help = "SQLite database path to create or update")]
     pub db: PathBuf,
-    #[arg(long, default_value_t = 10_000)]
+    #[arg(long, default_value_t = 10_000, help = "Number of rows to write per batch")]
     pub batch_size: usize,
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help = "Disable progress output")]
     pub quiet: bool,
 }
 

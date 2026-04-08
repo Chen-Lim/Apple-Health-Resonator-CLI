@@ -18,6 +18,13 @@ If the binary is not installed globally, run from the repository root with:
 cargo run -- <subcommand> ...
 ```
 
+For command discovery or contract checks, agents may call:
+
+```bash
+ahr --help
+ahr --version
+```
+
 Subcommands:
 
 ```bash

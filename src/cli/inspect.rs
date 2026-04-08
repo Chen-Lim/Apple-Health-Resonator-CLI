@@ -9,7 +9,7 @@ use crate::output::json::to_pretty_json;
 
 #[derive(Debug, Args)]
 pub struct InspectArgs {
-    #[arg(long)]
+    #[arg(long, help = "SQLite database to inspect")]
     pub db: PathBuf,
 }
 
