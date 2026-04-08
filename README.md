@@ -1,9 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rust-2021-blue.svg)](https://www.rust-lang.org/)
 
-Apple Health Resonator (`ahr`) is a local-first CLI for importing Apple Health exports into SQLite and querying them safely. It is designed for individual use as well as AI-agent workflows.
-
-`ahr` converts `export.xml` or `export.zip` into a stable local database, keeps all processing on-device, and exposes read-only commands for inspection, summary, and SQL querying.
+If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 
 [中文说明](#中文说明) | [English](#english) | [AI Agent Guide](./AGENTS.md)
 
