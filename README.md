@@ -37,7 +37,7 @@ brew install Chen-Lim/tap/ahr
 
 **手动下载**
 
-从 [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) 下载对应版本的二进制文件，并将其加入 `PATH`。
+从 [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) 下载对应版本的 Apple Silicon 二进制文件，并将其加入 `PATH`。
 
 **源码编译**
 
@@ -117,7 +117,7 @@ brew install Chen-Lim/tap/ahr
 
 **Manual download**
 
-Download the appropriate binary from [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) and add it to your `PATH`.
+Download the appropriate Apple Silicon binary from [Releases](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/releases) and add it to your `PATH`.
 
 **Build from source**
 
