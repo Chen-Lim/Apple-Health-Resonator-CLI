@@ -43,6 +43,9 @@ health_data.db
 # VS Code
 .vscode/
 
+# OpenAI
+.codex/
+
 # 4. OS & Environment
 
 # macOS
