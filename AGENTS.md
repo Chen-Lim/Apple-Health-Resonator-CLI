@@ -31,7 +31,7 @@ Use `ahr` when the task is to import Apple Health exports, inspect a generated S
 ## Command Contract
 
 ```bash
-ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet]
 ahr inspect --db <DB>
 ahr stats --db <DB>
 ahr query --db <DB> --sql "<SQL>" [--limit <N>]

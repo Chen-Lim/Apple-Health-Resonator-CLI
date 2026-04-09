@@ -16,6 +16,7 @@ pub enum ParsedEntity {
 pub struct IngestConfig {
     pub input_path: PathBuf,
     pub db_path: PathBuf,
+    pub error_log_path: Option<PathBuf>,
     pub batch_size: usize,
     pub quiet: bool,
 }

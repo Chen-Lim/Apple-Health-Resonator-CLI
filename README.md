@@ -51,7 +51,7 @@ cargo build --release
 1. 导入 Apple Health 导出文件到本地 SQLite：
 
 ```bash
-ahr ingest /path/to/export.zip --db ./health_data.db
+ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl
 ```
 
 2. 查看数据库摘要：
@@ -69,7 +69,7 @@ ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date
 ### CLI 概览
 
 ```bash
-ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet]
 ahr inspect --db <DB>
 ahr stats --db <DB>
 ahr query --db <DB> --sql "<SQL>" [--limit <N>]
@@ -131,7 +131,7 @@ cargo build --release
 1. Ingest an Apple Health export into a local SQLite database:
 
 ```bash
-ahr ingest /path/to/export.zip --db ./health_data.db
+ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl
 ```
 
 2. Inspect database coverage:
@@ -149,7 +149,7 @@ ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date
 ### CLI Summary
 
 ```bash
-ahr ingest <PATH> [--db <DB>] [--batch-size <N>] [--quiet]
+ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet]
 ahr inspect --db <DB>
 ahr stats --db <DB>
 ahr query --db <DB> --sql "<SQL>" [--limit <N>]
