@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::Connection;
+use duckdb::Connection;
 
 const SCHEMA_VERSION: &str = "v1.0";
 
@@ -7,44 +7,68 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS records (
-          id INTEGER PRIMARY KEY,
-          record_type TEXT NOT NULL,
-          value_text TEXT,
-          value_num REAL,
-          unit TEXT,
-          source_name TEXT,
-          source_version TEXT,
-          device TEXT,
-          creation_date TEXT,
-          start_date TEXT NOT NULL,
-          end_date TEXT NOT NULL,
-          dedupe_key TEXT UNIQUE
+          record_type VARCHAR NOT NULL,
+          value_text VARCHAR,
+          value_num DOUBLE,
+          unit VARCHAR,
+          source_name VARCHAR,
+          source_version VARCHAR,
+          device VARCHAR,
+          creation_date VARCHAR,
+          start_date VARCHAR NOT NULL,
+          end_date VARCHAR NOT NULL,
+          dedupe_key VARCHAR PRIMARY KEY
         );
 
         CREATE TABLE IF NOT EXISTS workouts (
-          id INTEGER PRIMARY KEY,
-          workout_type TEXT NOT NULL,
-          duration REAL,
-          duration_unit TEXT,
-          total_distance REAL,
-          total_energy_burned REAL,
-          source_name TEXT,
-          creation_date TEXT,
-          start_date TEXT NOT NULL,
-          end_date TEXT NOT NULL,
-          dedupe_key TEXT UNIQUE
+          workout_type VARCHAR NOT NULL,
+          duration DOUBLE,
+          duration_unit VARCHAR,
+          total_distance DOUBLE,
+          total_energy_burned DOUBLE,
+          source_name VARCHAR,
+          creation_date VARCHAR,
+          start_date VARCHAR NOT NULL,
+          end_date VARCHAR NOT NULL,
+          dedupe_key VARCHAR PRIMARY KEY
         );
 
         CREATE TABLE IF NOT EXISTS ingest_runs (
-          id INTEGER PRIMARY KEY,
-          started_at TEXT NOT NULL,
-          finished_at TEXT,
-          input_path TEXT NOT NULL,
-          records_inserted INTEGER,
-          workouts_inserted INTEGER,
-          records_skipped INTEGER,
-          errors_count INTEGER,
-          schema_version TEXT NOT NULL
+          started_at VARCHAR NOT NULL,
+          finished_at VARCHAR,
+          input_path VARCHAR NOT NULL,
+          records_inserted BIGINT,
+          workouts_inserted BIGINT,
+          records_skipped BIGINT,
+          errors_count BIGINT,
+          schema_version VARCHAR NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS records_staging (
+          record_type VARCHAR,
+          value_text VARCHAR,
+          value_num DOUBLE,
+          unit VARCHAR,
+          source_name VARCHAR,
+          source_version VARCHAR,
+          device VARCHAR,
+          creation_date VARCHAR,
+          start_date VARCHAR,
+          end_date VARCHAR,
+          dedupe_key VARCHAR
+        );
+
+        CREATE TABLE IF NOT EXISTS workouts_staging (
+          workout_type VARCHAR,
+          duration DOUBLE,
+          duration_unit VARCHAR,
+          total_distance DOUBLE,
+          total_energy_burned DOUBLE,
+          source_name VARCHAR,
+          creation_date VARCHAR,
+          start_date VARCHAR,
+          end_date VARCHAR,
+          dedupe_key VARCHAR
         );
 
         CREATE INDEX IF NOT EXISTS idx_records_type_date ON records(record_type, start_date);

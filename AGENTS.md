@@ -4,9 +4,9 @@ Guidance for AI agents working with the `ahr` CLI in this repository.
 
 ## Scope
 
-Use `ahr` when the task is to import Apple Health exports, inspect a generated SQLite database, summarize its contents, or answer questions with read-only SQL.
+Use `ahr` when the task is to import Apple Health exports, inspect a generated DuckDB database, summarize its contents, or answer questions with read-only SQL.
 
-`ahr` is a local CLI. It imports `export.xml` or `export.zip` into SQLite and exposes bounded read-only commands for agent use.
+`ahr` is a local CLI. It imports `export.xml` or `export.zip` into DuckDB and exposes bounded read-only commands for agent use.
 
 ## Ground Rules
 
@@ -22,7 +22,7 @@ Use `ahr` when the task is to import Apple Health exports, inspect a generated S
 
 ## Standard Workflow
 
-1. Confirm the SQLite database path.
+1. Confirm the DuckDB database path.
 2. If needed, run `ahr ingest`.
 3. Run `ahr inspect` for orientation.
 4. Run `ahr stats` if summary metrics are useful.
@@ -66,7 +66,7 @@ General health records.
 
 Columns:
 
-`id`, `record_type`, `value_text`, `value_num`, `unit`, `source_name`, `source_version`, `device`, `creation_date`, `start_date`, `end_date`, `dedupe_key`
+`record_type`, `value_text`, `value_num`, `unit`, `source_name`, `source_version`, `device`, `creation_date`, `start_date`, `end_date`, `dedupe_key`
 
 Useful filters:
 
@@ -80,7 +80,7 @@ Top-level workout sessions only.
 
 Columns:
 
-`id`, `workout_type`, `duration`, `duration_unit`, `total_distance`, `total_energy_burned`, `source_name`, `creation_date`, `start_date`, `end_date`, `dedupe_key`
+`workout_type`, `duration`, `duration_unit`, `total_distance`, `total_energy_burned`, `source_name`, `creation_date`, `start_date`, `end_date`, `dedupe_key`
 
 Useful filters:
 
@@ -93,7 +93,7 @@ Import history and counters.
 
 Columns:
 
-`id`, `started_at`, `finished_at`, `input_path`, `records_inserted`, `workouts_inserted`, `records_skipped`, `errors_count`, `schema_version`
+`started_at`, `finished_at`, `input_path`, `records_inserted`, `workouts_inserted`, `records_skipped`, `errors_count`, `schema_version`
 
 ## SQL Safety
 

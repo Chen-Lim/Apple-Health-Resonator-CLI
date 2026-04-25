@@ -9,7 +9,7 @@ If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 
 ### 项目简介
 
-**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 SQLite，并通过受控的只读接口进行检查、统计和查询。
+**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 **DuckDB**，并通过受控的只读接口进行检查、统计和查询。
 
 适合两类场景：
 
@@ -20,7 +20,7 @@ If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 
 - **本地处理**：不依赖云端服务，数据始终保留在本机。
 - **高性能导入**：支持流式解析大型 `export.xml`，也可直接读取 `export.zip`。
-- **稳定 Schema**：导入后生成可预测的 SQLite 结构，便于后续分析和自动化。
+- **稳定 Schema**：导入后生成可预测的 DuckDB 结构，便于后续分析和自动化。
 - **去重与时间标准化**：统一时间格式并避免重复导入。
 - **面向 Agent 的输出**：`inspect` 提供格式化 JSON，`stats` 和 `query` 提供紧凑 JSON。
 - **只读查询防护**：`query` 仅允许单条只读 SQL，阻止 `DROP`、`UPDATE`、`DELETE`、`ATTACH` 等语句。
@@ -48,7 +48,7 @@ cargo build --release
 
 ### 快速开始
 
-1. 导入 Apple Health 导出文件到本地 SQLite：
+1. 导入 Apple Health 导出文件到本地 DuckDB：
 
 ```bash
 ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl
@@ -89,7 +89,7 @@ ahr query --db <DB> --sql "<SQL>" [--limit <N>]
 
 ### Overview
 
-**Apple Health Resonator (`ahr`)** is a local-first CLI for importing Apple Health exports (`export.xml` or `export.zip`) into SQLite and querying them through a controlled, read-only interface.
+**Apple Health Resonator (`ahr`)** is a local-first CLI for importing Apple Health exports (`export.xml` or `export.zip`) into DuckDB and querying them through a controlled, read-only interface.
 
 It is suitable for:
 
@@ -100,7 +100,7 @@ It is suitable for:
 
 - **Local-first**: no cloud sync; data stays on the machine.
 - **Fast ingestion**: stream-parses large `export.xml` files and can read `export.zip` directly.
-- **Stable schema**: writes to a predictable SQLite structure for analysis and automation.
+- **Stable schema**: writes to a predictable DuckDB structure for analysis and automation.
 - **Deduplication and normalized timestamps**: avoids duplicate imports and standardizes time values.
 - **Agent-oriented output**: `inspect` returns pretty JSON; `stats` and `query` return compact JSON.
 - **Read-only SQL enforcement**: blocks mutating or unsafe statements such as `DROP`, `UPDATE`, `DELETE`, and `ATTACH`.
@@ -128,7 +128,7 @@ cargo build --release
 
 ### Quick Start
 
-1. Ingest an Apple Health export into a local SQLite database:
+1. Ingest an Apple Health export into a local DuckDB database:
 
 ```bash
 ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl

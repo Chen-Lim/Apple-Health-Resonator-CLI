@@ -9,7 +9,7 @@ use crate::output::json::to_compact_json;
 
 #[derive(Debug, Args)]
 pub struct StatsArgs {
-    #[arg(long, help = "SQLite database to summarize")]
+    #[arg(long, help = "DuckDB database to summarize")]
     pub db: PathBuf,
 }
 
