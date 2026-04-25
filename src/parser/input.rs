@@ -35,7 +35,14 @@ fn open_zip(path: &Path) -> Result<InputSource> {
         .find(|&idx| {
             archive
                 .by_index_raw(idx)
-                .map(|entry| is_supported_export_xml_name(entry.name()))
+                .map(|entry| {
+                    // The UTF-8 flag may not be set even when the bytes are valid UTF-8
+                    // (common in Apple Health exports). Decode raw bytes as UTF-8 first,
+                    // falling back to the crate's default CP437 decoding.
+                    let name = std::str::from_utf8(entry.name_raw())
+                        .unwrap_or_else(|_| entry.name());
+                    is_supported_export_xml_name(name)
+                })
                 .unwrap_or(false)
         })
         .ok_or_else(|| {
