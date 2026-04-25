@@ -9,7 +9,7 @@ If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 
 ### 项目简介
 
-**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 SQLite，并通过受控的只读接口进行检查、统计和查询。
+**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 **DuckDB**，并通过受控的只读接口进行检查、统计和查询。
 
 适合两类场景：
 
