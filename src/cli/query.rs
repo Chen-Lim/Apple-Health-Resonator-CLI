@@ -9,7 +9,7 @@ use crate::output::json::to_compact_json;
 
 #[derive(Debug, Args)]
 pub struct QueryArgs {
-    #[arg(long, help = "SQLite database to query")]
+    #[arg(long, help = "DuckDB database to query")]
     pub db: PathBuf,
     #[arg(long, help = "Single read-only SQL statement to execute")]
     pub sql: String,
