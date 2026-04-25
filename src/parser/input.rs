@@ -30,11 +30,14 @@ fn open_xml(path: &Path) -> Result<InputSource> {
 
 fn open_zip(path: &Path) -> Result<InputSource> {
     let file = File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let archive = ZipArchive::new(file).context("failed to read zip archive")?;
-    let entry_index = archive
-        .file_names()
-        .enumerate()
-        .find_map(|(idx, name)| is_supported_export_xml_name(name).then_some(idx))
+    let mut archive = ZipArchive::new(file).context("failed to read zip archive")?;
+    let entry_index = (0..archive.len())
+        .find(|&idx| {
+            archive
+                .by_index_raw(idx)
+                .map(|entry| is_supported_export_xml_name(entry.name()))
+                .unwrap_or(false)
+        })
         .ok_or_else(|| {
             anyhow!("zip archive does not contain a supported Apple Health export xml file")
         })?;
