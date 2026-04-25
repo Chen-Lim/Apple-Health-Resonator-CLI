@@ -19,8 +19,7 @@ pub fn fetch_inspect_summary(conn: &Connection) -> Result<InspectSummary> {
         rows.collect::<duckdb::Result<Vec<_>>>()?
     };
 
-    let record_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM records", [], |row| row.get(0))?;
+    let record_count: i64 = conn.query_row("SELECT COUNT(*) FROM records", [], |row| row.get(0))?;
     let workout_count: i64 =
         conn.query_row("SELECT COUNT(*) FROM workouts", [], |row| row.get(0))?;
     let date_range = conn.query_row(
@@ -147,13 +146,20 @@ pub fn run_select_query(
 ) -> Result<Vec<Map<String, Value>>> {
     validate_select_sql(sql)?;
     let mut stmt = conn.prepare(sql)?;
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(|name| name.to_string())
-        .collect::<Vec<_>>();
-
     let mut rows = stmt.query([])?;
+
+    // DuckDB only resolves the result schema once the query has executed, so we
+    // pull column names through `Rows::as_ref()` after `query()` rather than
+    // off the prepared statement.
+    let column_names: Vec<String> = match rows.as_ref() {
+        Some(s) => s
+            .column_names()
+            .into_iter()
+            .map(|name| name.to_string())
+            .collect(),
+        None => Vec::new(),
+    };
+
     let mut results = Vec::new();
     while let Some(row) = rows.next()? {
         if results.len() >= limit {
@@ -196,10 +202,35 @@ fn value_ref_to_json(value: ValueRef<'_>) -> Value {
 /// read-only intent by combining a leading-keyword check with a token-level
 /// blacklist over the SQL with string literals and comments stripped.
 const FORBIDDEN_TOKENS: &[&str] = &[
-    "INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "REPLACE", "TRUNCATE",
-    "CREATE", "DROP", "ALTER", "RENAME", "VACUUM", "ANALYZE", "REINDEX",
-    "ATTACH", "DETACH", "COPY", "EXPORT", "IMPORT", "INSTALL", "LOAD",
-    "PRAGMA", "SET", "RESET", "CALL", "USE", "GRANT", "REVOKE", "CHECKPOINT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "UPSERT",
+    "REPLACE",
+    "TRUNCATE",
+    "CREATE",
+    "DROP",
+    "ALTER",
+    "RENAME",
+    "VACUUM",
+    "ANALYZE",
+    "REINDEX",
+    "ATTACH",
+    "DETACH",
+    "COPY",
+    "EXPORT",
+    "IMPORT",
+    "INSTALL",
+    "LOAD",
+    "PRAGMA",
+    "SET",
+    "RESET",
+    "CALL",
+    "USE",
+    "GRANT",
+    "REVOKE",
+    "CHECKPOINT",
 ];
 
 fn validate_select_sql(sql: &str) -> Result<()> {
@@ -329,12 +360,7 @@ fn contains_word(haystack_upper: &str, word_upper: &str) -> bool {
 fn leading_keyword(sql: &str) -> Option<String> {
     sql.split_whitespace()
         .next()
-        .map(|token| {
-            token
-                .trim_start_matches(|c: char| c == '(')
-                .trim_end_matches(';')
-                .trim()
-        })
+        .map(|token| token.trim_start_matches('(').trim_end_matches(';').trim())
         .map(str::to_ascii_lowercase)
 }
 

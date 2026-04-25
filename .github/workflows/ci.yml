@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - feat/duckdb
   pull_request:
     branches:
       - master
+      - feat/duckdb
 
 permissions:
   contents: read

@@ -1,6 +1,6 @@
 [package]
 name = "apple-health-resonator"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "High-performance Rust CLI for ingesting Apple Health export into DuckDB"
 license = "MIT"

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use indicatif::{ProgressBar, ProgressStyle};
 use duckdb::params;
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 
 use crate::domain::{IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout};

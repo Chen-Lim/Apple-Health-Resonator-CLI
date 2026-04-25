@@ -13,7 +13,11 @@ pub struct QueryArgs {
     pub db: PathBuf,
     #[arg(long, help = "Single read-only SQL statement to execute")]
     pub sql: String,
-    #[arg(long, default_value_t = 1000, help = "Maximum rows to emit in CLI output")]
+    #[arg(
+        long,
+        default_value_t = 1000,
+        help = "Maximum rows to emit in CLI output"
+    )]
     pub limit: usize,
 }
 

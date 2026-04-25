@@ -103,7 +103,8 @@ impl<'a> BatchWriter<'a> {
 
         self.records_inserted += r_inserted;
         self.workouts_inserted += w_inserted;
-        self.records_skipped += (record_batch_size - r_inserted) + (workout_batch_size - w_inserted);
+        self.records_skipped +=
+            (record_batch_size - r_inserted) + (workout_batch_size - w_inserted);
 
         self.record_batch.clear();
         self.workout_batch.clear();
