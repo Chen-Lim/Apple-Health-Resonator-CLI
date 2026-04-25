@@ -16,13 +16,12 @@ export.xml
 export.zip
 /export/
 
-# 绝对禁止提交生成的 SQLite 数据库及其中间文件
+# 绝对禁止提交生成的 DuckDB / SQLite 数据库及其中间文件
 *.db
+*.duckdb
 *.sqlite
 *.sqlite3
-*-journal
-*-shm
-*-wal
+*.wal
 health_data.db
 
 # 忽略测试生成的临时目录或大规模切片出的 CSV
@@ -47,6 +46,9 @@ health_data.db
 
 # OpenAI
 .codex/
+
+# Anthropic
+.claude/
 
 # 4. OS & Environment
 

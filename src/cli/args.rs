@@ -6,7 +6,7 @@ use crate::cli::{ingest::IngestArgs, inspect::InspectArgs, query::QueryArgs, sta
 #[command(name = "ahr")]
 #[command(version)]
 #[command(
-    about = "Import Apple Health exports into SQLite and expose inspect, stats, and query commands for agents",
+    about = "Import Apple Health exports into DuckDB and expose inspect, stats, and query commands for agents",
     long_about = None
 )]
 pub struct Cli {
@@ -16,7 +16,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    #[command(about = "Ingest an Apple Health export.xml or export.zip into SQLite")]
+    #[command(about = "Ingest an Apple Health export.xml or export.zip into DuckDB")]
     Ingest(IngestArgs),
     #[command(about = "Inspect database coverage and schema-level summary as pretty JSON")]
     Inspect(InspectArgs),

@@ -9,11 +9,15 @@ use crate::output::json::to_compact_json;
 
 #[derive(Debug, Args)]
 pub struct QueryArgs {
-    #[arg(long, help = "SQLite database to query")]
+    #[arg(long, help = "DuckDB database to query")]
     pub db: PathBuf,
     #[arg(long, help = "Single read-only SQL statement to execute")]
     pub sql: String,
-    #[arg(long, default_value_t = 1000, help = "Maximum rows to emit in CLI output")]
+    #[arg(
+        long,
+        default_value_t = 1000,
+        help = "Maximum rows to emit in CLI output"
+    )]
     pub limit: usize,
 }
 

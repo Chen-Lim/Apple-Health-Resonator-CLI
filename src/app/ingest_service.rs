@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
+use duckdb::params;
 use indicatif::{ProgressBar, ProgressStyle};
-use rusqlite::params;
 use serde::Serialize;
 
 use crate::domain::{IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout};
@@ -166,7 +166,7 @@ pub fn run_ingest(config: IngestConfig) -> Result<IngestReport> {
 
 fn run_ingest_reader<R: BufRead>(
     reader: R,
-    conn: &mut rusqlite::Connection,
+    conn: &mut duckdb::Connection,
     batch_size: usize,
     progress: Option<&ProgressBar>,
     db_path: &Path,

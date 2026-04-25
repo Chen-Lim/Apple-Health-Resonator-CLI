@@ -13,7 +13,7 @@ pub struct IngestArgs {
     #[arg(
         long,
         default_value = "./health_data.db",
-        help = "SQLite database path to create or update"
+        help = "DuckDB database path to create or update"
     )]
     pub db: PathBuf,
     #[arg(long, help = "Override path for ingest error log output")]
