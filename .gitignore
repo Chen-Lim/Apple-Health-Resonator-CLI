@@ -62,3 +62,7 @@ health_data.db
 # Windows
 Thumbs.db
 ehthumbs.db
+
+# docs
+report.md
+docs/
