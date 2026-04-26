@@ -22,6 +22,7 @@ If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 - **高性能导入**：支持流式解析大型 `export.xml`，也可直接读取 `export.zip`。
 - **稳定 Schema**：导入后生成可预测的 DuckDB 结构，便于后续分析和自动化。
 - **去重与时间标准化**：统一时间格式并避免重复导入。
+- **增量导入**：兼容 iOS app `SimpleHealthExportCSV` 导出的 zip / 解压目录，按 `record_type` 做高水位跳过，详见 [`docs/incremental-ingest.md`](./docs/incremental-ingest.md)。
 - **面向 Agent 的输出**：`inspect` 提供格式化 JSON，`stats` 和 `query` 提供紧凑 JSON。
 - **只读查询防护**：`query` 仅允许单条只读 SQL，阻止 `DROP`、`UPDATE`、`DELETE`、`ATTACH` 等语句。
 
@@ -102,6 +103,7 @@ It is suitable for:
 - **Fast ingestion**: stream-parses large `export.xml` files and can read `export.zip` directly.
 - **Stable schema**: writes to a predictable DuckDB structure for analysis and automation.
 - **Deduplication and normalized timestamps**: avoids duplicate imports and standardizes time values.
+- **Incremental ingest**: also reads SimpleHealthExportCSV bundles (zip or unpacked directory) and skips already-imported rows by `record_type` watermark — see [`docs/incremental-ingest.md`](./docs/incremental-ingest.md).
 - **Agent-oriented output**: `inspect` returns pretty JSON; `stats` and `query` return compact JSON.
 - **Read-only SQL enforcement**: blocks mutating or unsafe statements such as `DROP`, `UPDATE`, `DELETE`, and `ATTACH`.
 

@@ -19,6 +19,8 @@ pub struct IngestConfig {
     pub error_log_path: Option<PathBuf>,
     pub batch_size: usize,
     pub quiet: bool,
+    /// Skip the "this archive was already imported" guard for CSV bundles.
+    pub force: bool,
 }
 
 #[derive(Debug, Clone)]

@@ -1,16 +1,19 @@
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use duckdb::params;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 
-use crate::domain::{IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout};
+use crate::domain::{IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout, Record, Workout};
 use crate::infra::time::now_utc_rfc3339;
+use crate::parser::csv_reader::open_csv_stream;
 use crate::parser::extractor::{extract, ExtractedRaw};
+use crate::parser::file_names::type_id_from_csv_filename;
 use crate::parser::input::{open_input, InputSource};
 use crate::parser::normalizer::normalize;
 use crate::parser::xml_reader::XmlStream;
@@ -28,6 +31,14 @@ pub struct IngestReport {
     pub error_log_warning: Option<String>,
     pub error_log_suppressed: bool,
     pub elapsed_ms: u128,
+    /// CSV-only: number of CSV files seen.
+    pub files_processed: usize,
+    /// CSV-only: number of rows skipped because their `end_date` is at or before
+    /// the existing DB watermark for that record/workout type.
+    pub rows_skipped_by_watermark: i64,
+    /// CSV-only: true if we short-circuited because this archive (by filename)
+    /// matched a previously successful ingest run.
+    pub archive_already_ingested: bool,
 }
 
 #[derive(Debug)]
@@ -39,6 +50,8 @@ struct IngestReadReport {
     error_log_path: Option<String>,
     error_log_warning: Option<String>,
     error_log_suppressed: bool,
+    files_processed: usize,
+    rows_skipped_by_watermark: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,6 +102,7 @@ pub fn run_ingest(config: IngestConfig) -> Result<IngestReport> {
         Some(progress)
     };
 
+    let mut archive_already_ingested = false;
     let ingest_result = match input {
         InputSource::Xml(reader) => run_ingest_reader(
             reader,
@@ -115,6 +129,40 @@ pub fn run_ingest(config: IngestConfig) -> Result<IngestReport> {
                 &config.db_path,
                 config.error_log_path.as_deref(),
             )?
+        }
+        InputSource::CsvZip {
+            archive,
+            entry_indices,
+        } => {
+            if !config.force && bundle_already_ingested(&conn, &config.input_path)? {
+                archive_already_ingested = true;
+                empty_csv_report()
+            } else {
+                run_ingest_csv_zip(
+                    archive,
+                    entry_indices,
+                    &mut conn,
+                    config.batch_size,
+                    progress.as_ref(),
+                    &config.db_path,
+                    config.error_log_path.as_deref(),
+                )?
+            }
+        }
+        InputSource::CsvDir { csv_files } => {
+            if !config.force && bundle_already_ingested(&conn, &config.input_path)? {
+                archive_already_ingested = true;
+                empty_csv_report()
+            } else {
+                run_ingest_csv_dir(
+                    csv_files,
+                    &mut conn,
+                    config.batch_size,
+                    progress.as_ref(),
+                    &config.db_path,
+                    config.error_log_path.as_deref(),
+                )?
+            }
         }
     };
 
@@ -161,6 +209,9 @@ pub fn run_ingest(config: IngestConfig) -> Result<IngestReport> {
         error_log_warning: ingest_result.error_log_warning,
         error_log_suppressed: ingest_result.error_log_suppressed,
         elapsed_ms: timer.elapsed().as_millis(),
+        files_processed: ingest_result.files_processed,
+        rows_skipped_by_watermark: ingest_result.rows_skipped_by_watermark,
+        archive_already_ingested,
     })
 }
 
@@ -218,7 +269,279 @@ fn run_ingest_reader<R: BufRead>(
         error_log_path: error_logger.path_string(),
         error_log_warning: error_logger.warning,
         error_log_suppressed: error_logger.suppressed,
+        files_processed: 0,
+        rows_skipped_by_watermark: 0,
     })
+}
+
+fn empty_csv_report() -> IngestReadReport {
+    IngestReadReport {
+        records_inserted: 0,
+        workouts_inserted: 0,
+        records_skipped: 0,
+        errors_count: 0,
+        error_log_path: None,
+        error_log_warning: None,
+        error_log_suppressed: false,
+        files_processed: 0,
+        rows_skipped_by_watermark: 0,
+    }
+}
+
+fn bundle_already_ingested(conn: &duckdb::Connection, input_path: &Path) -> Result<bool> {
+    // Match by file/directory basename so users can re-run from any cwd.
+    let Some(name) = input_path.file_name().and_then(|n| n.to_str()) else {
+        return Ok(false);
+    };
+    let pattern = format!("%{name}");
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM ingest_runs \
+         WHERE input_path LIKE ?1 \
+           AND (records_inserted > 0 OR workouts_inserted > 0)",
+        params![pattern],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+struct WatermarkCache {
+    records: HashMap<String, Option<String>>,
+    workouts: HashMap<String, Option<String>>,
+}
+
+impl WatermarkCache {
+    fn new() -> Self {
+        Self {
+            records: HashMap::new(),
+            workouts: HashMap::new(),
+        }
+    }
+
+    fn record_max(&mut self, conn: &duckdb::Connection, record_type: &str) -> Result<Option<String>> {
+        if let Some(v) = self.records.get(record_type) {
+            return Ok(v.clone());
+        }
+        let v: Option<String> = conn.query_row(
+            "SELECT MAX(end_date) FROM records WHERE record_type = ?1",
+            params![record_type],
+            |row| row.get(0),
+        )?;
+        self.records.insert(record_type.to_string(), v.clone());
+        Ok(v)
+    }
+
+    fn workout_max(&mut self, conn: &duckdb::Connection, workout_type: &str) -> Result<Option<String>> {
+        if let Some(v) = self.workouts.get(workout_type) {
+            return Ok(v.clone());
+        }
+        let v: Option<String> = conn.query_row(
+            "SELECT MAX(end_date) FROM workouts WHERE workout_type = ?1",
+            params![workout_type],
+            |row| row.get(0),
+        )?;
+        self.workouts.insert(workout_type.to_string(), v.clone());
+        Ok(v)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_ingest_csv_zip(
+    mut archive: zip::ZipArchive<File>,
+    entry_indices: Vec<usize>,
+    conn: &mut duckdb::Connection,
+    batch_size: usize,
+    progress: Option<&ProgressBar>,
+    db_path: &Path,
+    error_log_path: Option<&Path>,
+) -> Result<IngestReadReport> {
+    let mut errors_count = 0_i64;
+    let mut processed = 0_u64;
+    let mut rows_skipped_by_watermark = 0_i64;
+    let mut files_processed = 0_usize;
+    let mut error_logger = IngestErrorLogger::new(db_path, error_log_path);
+    let mut watermarks = WatermarkCache::new();
+    let mut writer = BatchWriter::new(conn, batch_size)?;
+
+    for idx in entry_indices {
+        let (name, data) = {
+            let mut entry = archive
+                .by_index(idx)
+                .map_err(anyhow::Error::from)
+                .context("failed to open csv entry from zip")?;
+            let name = match std::str::from_utf8(entry.name_raw()) {
+                Ok(s) => s.to_string(),
+                Err(_) => entry.name().to_string(),
+            };
+            let mut buf = Vec::with_capacity(entry.size() as usize);
+            std::io::copy(&mut entry, &mut buf)
+                .with_context(|| format!("failed to read csv entry {name}"))?;
+            (name, buf)
+        };
+        let Some(type_id) = type_id_from_csv_filename(&name) else {
+            continue;
+        };
+        files_processed += 1;
+        process_csv_stream(
+            BufReader::new(std::io::Cursor::new(data)),
+            &type_id,
+            &mut writer,
+            &mut watermarks,
+            &mut error_logger,
+            progress,
+            &mut processed,
+            &mut errors_count,
+            &mut rows_skipped_by_watermark,
+        )?;
+    }
+
+    writer.flush()?;
+    error_logger.finish();
+
+    Ok(IngestReadReport {
+        records_inserted: writer.records_inserted(),
+        workouts_inserted: writer.workouts_inserted(),
+        records_skipped: writer.records_skipped(),
+        errors_count,
+        error_log_path: error_logger.path_string(),
+        error_log_warning: error_logger.warning,
+        error_log_suppressed: error_logger.suppressed,
+        files_processed,
+        rows_skipped_by_watermark,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_ingest_csv_dir(
+    csv_files: Vec<PathBuf>,
+    conn: &mut duckdb::Connection,
+    batch_size: usize,
+    progress: Option<&ProgressBar>,
+    db_path: &Path,
+    error_log_path: Option<&Path>,
+) -> Result<IngestReadReport> {
+    let mut errors_count = 0_i64;
+    let mut processed = 0_u64;
+    let mut rows_skipped_by_watermark = 0_i64;
+    let mut files_processed = 0_usize;
+    let mut error_logger = IngestErrorLogger::new(db_path, error_log_path);
+    let mut watermarks = WatermarkCache::new();
+    let mut writer = BatchWriter::new(conn, batch_size)?;
+
+    for path in csv_files {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| anyhow!("invalid csv file name"))?
+            .to_string();
+        let Some(type_id) = type_id_from_csv_filename(&name) else {
+            continue;
+        };
+        files_processed += 1;
+        let file = File::open(&path)
+            .with_context(|| format!("failed to open {}", path.display()))?;
+        process_csv_stream(
+            BufReader::new(file),
+            &type_id,
+            &mut writer,
+            &mut watermarks,
+            &mut error_logger,
+            progress,
+            &mut processed,
+            &mut errors_count,
+            &mut rows_skipped_by_watermark,
+        )?;
+    }
+
+    writer.flush()?;
+    error_logger.finish();
+
+    Ok(IngestReadReport {
+        records_inserted: writer.records_inserted(),
+        workouts_inserted: writer.workouts_inserted(),
+        records_skipped: writer.records_skipped(),
+        errors_count,
+        error_log_path: error_logger.path_string(),
+        error_log_warning: error_logger.warning,
+        error_log_suppressed: error_logger.suppressed,
+        files_processed,
+        rows_skipped_by_watermark,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_csv_stream<R: BufRead + 'static>(
+    reader: R,
+    type_id: &str,
+    writer: &mut BatchWriter<'_>,
+    watermarks: &mut WatermarkCache,
+    error_logger: &mut IngestErrorLogger,
+    progress: Option<&ProgressBar>,
+    processed: &mut u64,
+    errors_count: &mut i64,
+    rows_skipped_by_watermark: &mut i64,
+) -> Result<()> {
+    let mut stream = open_csv_stream(reader, type_id)?;
+    while let Some(entity) = stream.next_entity()? {
+        *processed += 1;
+        match extract(entity) {
+            ExtractedRaw::Record(raw) => match normalize(ExtractedRaw::Record(raw.clone())) {
+                Ok(ParsedEntity::Record(record)) => {
+                    if record_below_watermark(&record, watermarks, writer)? {
+                        *rows_skipped_by_watermark += 1;
+                    } else {
+                        writer.write_record(&record)?;
+                    }
+                }
+                Ok(ParsedEntity::Workout(_)) => unreachable!(),
+                Err(error) => {
+                    *errors_count += 1;
+                    tracing::warn!(%error, "record skipped during ingest");
+                    error_logger.log_record_error(&raw, &error.to_string());
+                }
+            },
+            ExtractedRaw::Workout(raw) => match normalize(ExtractedRaw::Workout(raw.clone())) {
+                Ok(ParsedEntity::Workout(workout)) => {
+                    if workout_below_watermark(&workout, watermarks, writer)? {
+                        *rows_skipped_by_watermark += 1;
+                    } else {
+                        writer.write_workout(&workout)?;
+                    }
+                }
+                Ok(ParsedEntity::Record(_)) => unreachable!(),
+                Err(error) => {
+                    *errors_count += 1;
+                    tracing::warn!(%error, "workout skipped during ingest");
+                    error_logger.log_workout_error(&raw, &error.to_string());
+                }
+            },
+        }
+
+        if let Some(progress) = progress {
+            progress.set_position(*processed);
+            progress.set_message(errors_count.to_string());
+        }
+    }
+    Ok(())
+}
+
+fn record_below_watermark(
+    record: &Record,
+    watermarks: &mut WatermarkCache,
+    writer: &BatchWriter<'_>,
+) -> Result<bool> {
+    let conn = writer.conn();
+    let mark = watermarks.record_max(conn, &record.record_type)?;
+    Ok(matches!(mark, Some(ref m) if record.end_date.as_str() <= m.as_str()))
+}
+
+fn workout_below_watermark(
+    workout: &Workout,
+    watermarks: &mut WatermarkCache,
+    writer: &BatchWriter<'_>,
+) -> Result<bool> {
+    let conn = writer.conn();
+    let mark = watermarks.workout_max(conn, &workout.workout_type)?;
+    Ok(matches!(mark, Some(ref m) if workout.end_date.as_str() <= m.as_str()))
 }
 
 impl IngestErrorLogger {

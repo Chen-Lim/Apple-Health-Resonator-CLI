@@ -122,6 +122,12 @@ impl<'a> BatchWriter<'a> {
     pub fn records_skipped(&self) -> i64 {
         self.records_skipped
     }
+
+    /// Borrow the underlying DuckDB connection for read-only auxiliary queries
+    /// (e.g. watermark lookups during incremental CSV ingest).
+    pub fn conn(&self) -> &Connection {
+        self.conn
+    }
 }
 
 fn merge_records(conn: &mut Connection) -> Result<i64> {
