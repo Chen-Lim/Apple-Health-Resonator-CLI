@@ -9,7 +9,10 @@ If you are AI Agent, this is for you [AI Agent Guide](./AGENTS.md)
 
 ### 项目简介
 
-**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 导出的 `export.xml` 或 `export.zip` 导入 **DuckDB**，并通过受控的只读接口进行检查、统计和查询。
+**Apple Health Resonator (`ahr`)** 是一个本地优先的命令行工具，用于将 Apple Health 数据导入 **DuckDB**，并通过受控的只读接口进行检查、统计和查询。它接受两类输入：
+
+- Apple Health 官方导出的 `export.xml` / `export.zip`
+- iOS app **SimpleHealthExportCSV** 导出的 zip 包及其解压目录（v1.0.0 起，自动识别并做增量导入）
 
 适合两类场景：
 
@@ -49,19 +52,25 @@ cargo build --release
 
 ### 快速开始
 
-1. 导入 Apple Health 导出文件到本地 DuckDB：
+1. 首次导入：用 Apple Health 官方 `export.zip` 一次性建库：
 
 ```bash
 ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl
 ```
 
-2. 查看数据库摘要：
+2. 日常增量：把 SimpleHealthExportCSV 导出的 zip 直接喂给同一个 DB，重复执行即可——已存在的数据会被自动跳过：
+
+```bash
+ahr ingest ./HealthAll_2026-04-26_xx-xx_SimpleHealthExportCSV.zip --db ./health_data.db
+```
+
+3. 查看数据库摘要：
 
 ```bash
 ahr inspect --db ./health_data.db
 ```
 
-3. 执行只读 SQL 查询：
+4. 执行只读 SQL 查询：
 
 ```bash
 ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date FROM records ORDER BY start_date DESC LIMIT 20" --limit 20
@@ -70,13 +79,16 @@ ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date
 ### CLI 概览
 
 ```bash
-ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet]
+ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet] [--force]
 ahr inspect --db <DB>
-ahr stats --db <DB>
-ahr query --db <DB> --sql "<SQL>" [--limit <N>]
+ahr stats   --db <DB>
+ahr query   --db <DB> --sql "<SQL>" [--limit <N>]
 ```
 
-默认数据库路径为 `./health_data.db`。
+- `<PATH>` 接受：`*.xml`、`*.zip`（官方导出或 SimpleHealthExportCSV bundle）、或解压后的 SimpleHealthExportCSV 目录。
+- `--force`：对 SimpleHealthExportCSV bundle 关闭"同名包已导入"检查（仍然走 watermark + dedupe_key 兜底）。
+- 默认数据库路径为 `./health_data.db`，默认 batch size `10000`，`query` 默认 `--limit 1000`。
+- 增量导入的细节见 [`docs/incremental-ingest.md`](./docs/incremental-ingest.md)。
 
 ### 数据模型
 
@@ -90,7 +102,10 @@ ahr query --db <DB> --sql "<SQL>" [--limit <N>]
 
 ### Overview
 
-**Apple Health Resonator (`ahr`)** is a local-first CLI for importing Apple Health exports (`export.xml` or `export.zip`) into DuckDB and querying them through a controlled, read-only interface.
+**Apple Health Resonator (`ahr`)** is a local-first CLI for importing Apple Health data into DuckDB and querying it through a controlled, read-only interface. It accepts two kinds of input:
+
+- Apple Health's official `export.xml` / `export.zip`
+- The zip bundles (and unpacked directories) produced by the iOS app **SimpleHealthExportCSV** — auto-detected and ingested incrementally since v1.0.0
 
 It is suitable for:
 
@@ -130,19 +145,25 @@ cargo build --release
 
 ### Quick Start
 
-1. Ingest an Apple Health export into a local DuckDB database:
+1. Backfill: ingest the official Apple Health `export.zip` once to seed the DB:
 
 ```bash
 ahr ingest /path/to/export.zip --db ./health_data.db --log ./health_data.ingest-errors.jsonl
 ```
 
-2. Inspect database coverage:
+2. Daily incremental: feed SimpleHealthExportCSV bundles into the same DB — re-running the same command is safe; already-imported rows are skipped automatically:
+
+```bash
+ahr ingest ./HealthAll_2026-04-26_xx-xx_SimpleHealthExportCSV.zip --db ./health_data.db
+```
+
+3. Inspect database coverage:
 
 ```bash
 ahr inspect --db ./health_data.db
 ```
 
-3. Run a read-only SQL query:
+4. Run a read-only SQL query:
 
 ```bash
 ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date FROM records ORDER BY start_date DESC LIMIT 20" --limit 20
@@ -151,13 +172,16 @@ ahr query --db ./health_data.db --sql "SELECT record_type, value_num, start_date
 ### CLI Summary
 
 ```bash
-ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet]
+ahr ingest <PATH> [--db <DB>] [--log <PATH>] [--batch-size <N>] [--quiet] [--force]
 ahr inspect --db <DB>
-ahr stats --db <DB>
-ahr query --db <DB> --sql "<SQL>" [--limit <N>]
+ahr stats   --db <DB>
+ahr query   --db <DB> --sql "<SQL>" [--limit <N>]
 ```
 
-The default database path is `./health_data.db`.
+- `<PATH>` accepts: `*.xml`, `*.zip` (Apple Health official **or** SimpleHealthExportCSV bundle), or an unpacked SimpleHealthExportCSV directory.
+- `--force`: disables the "this bundle was already imported" guard for SimpleHealthExportCSV input (watermark + `dedupe_key` still apply).
+- Defaults: DB path `./health_data.db`, batch size `10000`, `query --limit 1000`.
+- See [`docs/incremental-ingest.md`](./docs/incremental-ingest.md) for the incremental ingest design.
 
 ### Data Model
 
