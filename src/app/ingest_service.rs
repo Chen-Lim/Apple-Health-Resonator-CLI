@@ -9,7 +9,9 @@ use duckdb::params;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 
-use crate::domain::{IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout, Record, Workout};
+use crate::domain::{
+    IngestConfig, IngestRun, ParsedEntity, RawRecord, RawWorkout, Record, Workout,
+};
 use crate::infra::time::now_utc_rfc3339;
 use crate::parser::csv_reader::open_csv_stream;
 use crate::parser::extractor::{extract, ExtractedRaw};
@@ -317,7 +319,11 @@ impl WatermarkCache {
         }
     }
 
-    fn record_max(&mut self, conn: &duckdb::Connection, record_type: &str) -> Result<Option<String>> {
+    fn record_max(
+        &mut self,
+        conn: &duckdb::Connection,
+        record_type: &str,
+    ) -> Result<Option<String>> {
         if let Some(v) = self.records.get(record_type) {
             return Ok(v.clone());
         }
@@ -330,7 +336,11 @@ impl WatermarkCache {
         Ok(v)
     }
 
-    fn workout_max(&mut self, conn: &duckdb::Connection, workout_type: &str) -> Result<Option<String>> {
+    fn workout_max(
+        &mut self,
+        conn: &duckdb::Connection,
+        workout_type: &str,
+    ) -> Result<Option<String>> {
         if let Some(v) = self.workouts.get(workout_type) {
             return Ok(v.clone());
         }
@@ -437,8 +447,8 @@ fn run_ingest_csv_dir(
             continue;
         };
         files_processed += 1;
-        let file = File::open(&path)
-            .with_context(|| format!("failed to open {}", path.display()))?;
+        let file =
+            File::open(&path).with_context(|| format!("failed to open {}", path.display()))?;
         process_csv_stream(
             BufReader::new(file),
             &type_id,

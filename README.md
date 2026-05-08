@@ -1,3 +1,4 @@
+[![CI](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Chen-Lim/Apple-Health-Resonator-CLI/actions/workflows/ci.yml?query=branch%3Amaster)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rust-2021-blue.svg)](https://www.rust-lang.org/)
 

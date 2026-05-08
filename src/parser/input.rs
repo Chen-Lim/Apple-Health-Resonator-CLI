@@ -19,7 +19,9 @@ pub(crate) enum InputSource {
         entry_indices: Vec<usize>,
     },
     /// Already-unpacked SimpleHealthExportCSV directory.
-    CsvDir { csv_files: Vec<PathBuf> },
+    CsvDir {
+        csv_files: Vec<PathBuf>,
+    },
 }
 
 pub(crate) fn open_input(path: &Path) -> Result<InputSource> {

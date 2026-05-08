@@ -84,9 +84,11 @@ impl CsvStream {
             CsvKind::Record { type_id } => {
                 XmlEntity::Record(record_attrs(type_id, &self.headers, &self.record_buf))
             }
-            CsvKind::Workout { activity_type } => {
-                XmlEntity::Workout(workout_attrs(activity_type, &self.headers, &self.record_buf))
-            }
+            CsvKind::Workout { activity_type } => XmlEntity::Workout(workout_attrs(
+                activity_type,
+                &self.headers,
+                &self.record_buf,
+            )),
         }))
     }
 }

@@ -23,12 +23,12 @@ env:
   BIN_NAME: ahr
   BIN_ASSET_NAME: ahr-aarch64-apple-darwin
   TARGET_TRIPLE: aarch64-apple-darwin
-  SOURCE_ARCHIVE_REPO: Chen-Lim/Apple-Health-Resonator-CLI
 
 jobs:
   prepare-draft-release:
     name: Prepare Draft Release
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -63,7 +63,7 @@ jobs:
           fi
 
           source_archive_name="${release_tag}.tar.gz"
-          source_tarball_url="https://github.com/${SOURCE_ARCHIVE_REPO}/archive/refs/tags/${source_archive_name}"
+          source_tarball_url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${source_archive_name}"
 
           echo "cargo_version=${cargo_version}" >> "${GITHUB_OUTPUT}"
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
@@ -71,8 +71,8 @@ jobs:
           echo "source_archive_name=${source_archive_name}" >> "${GITHUB_OUTPUT}"
           echo "source_tarball_url=${source_tarball_url}" >> "${GITHUB_OUTPUT}"
 
-      - name: Install stable Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: ${{ env.TARGET_TRIPLE }}
 
@@ -129,7 +129,9 @@ jobs:
           EOF
 
           if gh release view "${release_tag}" >/dev/null 2>&1; then
-            gh release edit "${release_tag}" --draft=true --title "${release_title}"
+            # Release exists; only refresh the title and leave its draft/published state alone.
+            # We must not flip a published release back to draft.
+            gh release edit "${release_tag}" --title "${release_title}"
           else
             gh release create "${release_tag}" --draft --title "${release_title}" --notes-file "${notes_file}"
           fi
