@@ -21,12 +21,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   BIN_NAME: ahr
-  BIN_ASSET_NAME: ahr-aarch64-apple-darwin
+  BIN_ASSET_NAME: ahr-macos-arm64
   TARGET_TRIPLE: aarch64-apple-darwin
 
 jobs:
-  prepare-draft-release:
-    name: Prepare Draft Release
+  release:
+    name: Build and Release
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -101,14 +101,17 @@ jobs:
           curl -L --fail "${{ steps.meta.outputs.source_tarball_url }}" -o "${source_archive_path}"
 
           source_sha="$(shasum -a 256 "${source_archive_path}" | awk '{print $1}')"
+          binary_sha="$(shasum -a 256 "${binary_path}" | awk '{print $1}')"
           printf '%s  %s\n' "${source_sha}" "${{ steps.meta.outputs.source_archive_name }}" > "${release_dir}/SHA256SUMS"
+          printf '%s  %s\n' "${binary_sha}" "${BIN_ASSET_NAME}" >> "${release_dir}/SHA256SUMS"
 
           echo "release_dir=${release_dir}" >> "${GITHUB_OUTPUT}"
           echo "binary_path=${binary_path}" >> "${GITHUB_OUTPUT}"
           echo "source_archive_path=${source_archive_path}" >> "${GITHUB_OUTPUT}"
           echo "source_sha=${source_sha}" >> "${GITHUB_OUTPUT}"
+          echo "binary_sha=${binary_sha}" >> "${GITHUB_OUTPUT}"
 
-      - name: Create or update draft release
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -117,26 +120,32 @@ jobs:
 
           release_tag="${{ steps.meta.outputs.release_tag }}"
           release_title="ahr ${release_tag}"
-          notes_file="${RUNNER_TEMP}/draft-release-notes.md"
+          notes_file="${RUNNER_TEMP}/release-notes.md"
 
           cat > "${notes_file}" <<EOF
-          Draft release prepared automatically by GitHub Actions.
+          ## ahr ${release_tag}
 
-          Before publishing:
-          - verify the Apple Silicon binary asset
-          - update release notes
-          - update the Homebrew tap formula with the source tarball URL and SHA256
+          ### Installation
+
+          **Homebrew:**
+          \`\`\`bash
+          brew update && brew upgrade ahr
+          \`\`\`
+
+          **Direct download:** Download \`ahr-macos-arm64\` from the assets below, then:
+          \`\`\`bash
+          chmod +x ahr-macos-arm64
+          mv ahr-macos-arm64 /usr/local/bin/ahr
+          \`\`\`
           EOF
 
           if gh release view "${release_tag}" >/dev/null 2>&1; then
-            # Release exists; only refresh the title and leave its draft/published state alone.
-            # We must not flip a published release back to draft.
-            gh release edit "${release_tag}" --title "${release_title}"
+            gh release edit "${release_tag}" --title "${release_title}" --notes-file "${notes_file}"
           else
-            gh release create "${release_tag}" --draft --title "${release_title}" --notes-file "${notes_file}"
+            gh release create "${release_tag}" --title "${release_title}" --notes-file "${notes_file}"
           fi
 
-      - name: Upload draft release assets
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -152,36 +161,28 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Draft Release Prepared"
+            echo "## Release Published"
             echo
             echo "- Release tag: \`${{ steps.meta.outputs.release_tag }}\`"
             echo "- Cargo.toml version: \`${{ steps.meta.outputs.cargo_version }}\`"
-            echo "- Draft release status: created or updated"
             echo "- Binary asset: \`${BIN_ASSET_NAME}\`"
-            echo "- Source tarball URL: \`${{ steps.meta.outputs.source_tarball_url }}\`"
-            echo "- Source tarball sha256: \`${{ steps.assets.outputs.source_sha }}\`"
+            echo "- Binary sha256: \`${{ steps.assets.outputs.binary_sha }}\`"
             echo
-            echo "### Homebrew Formula Snippet"
-            echo '```ruby'
-            echo "url \"${{ steps.meta.outputs.source_tarball_url }}\""
-            echo "sha256 \"${{ steps.assets.outputs.source_sha }}\""
-            echo '```'
-            echo
-            echo "### SHA256SUMS"
-            echo '```text'
-            cat "${{ steps.assets.outputs.release_dir }}/SHA256SUMS"
-            echo '```'
-            echo
-            echo "### Manual Follow-up"
-            echo "1. Review the draft release page."
-            echo "2. Update the release notes."
-            echo "3. Copy the source tarball URL and sha256 into the Homebrew tap formula."
-            echo "4. Publish the draft release manually when ready."
+            echo "Homebrew tap update dispatched automatically."
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Echo copyable Homebrew values
+      - name: Dispatch Homebrew tap update
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         shell: bash
         run: |
-          echo "Source tarball URL: ${{ steps.meta.outputs.source_tarball_url }}"
-          echo "Source tarball sha256: ${{ steps.assets.outputs.source_sha }}"
-          cat "${{ steps.assets.outputs.release_dir }}/SHA256SUMS"
+          set -euo pipefail
+
+          gh api repos/Chen-Lim/homebrew-tap/dispatches \
+            --input - <<<"{
+              \"event_type\": \"ahr-release\",
+              \"client_payload\": {
+                \"version\": \"${{ steps.meta.outputs.tag_version }}\",
+                \"binary_sha256\": \"${{ steps.assets.outputs.binary_sha }}\"
+              }
+            }"
